@@ -1,6 +1,14 @@
 #!/bin/zsh
 
-typeset -Ax conf_locations
+typeset -Ag conf_locations
+
+local _conf_editor() {
+	if ! [[ -w ${1} ]]; then
+		sudoedit ${1}
+	else
+		$EDITOR ${1}
+	fi
+}
 
 conf() {
 	if [[ $1 == -r ]]; then
@@ -24,20 +32,34 @@ conf() {
 
 	local target=${(e)conf_locations[${1}]}
 	if [[ -d ${target} ]]; then
-		cd ${target}
-		if ! [[ -w ${target} ]]; then
-			su
-		fi
+		cd $target
 	elif [[ -f ${target} ]]; then
-		if ! [[ -w ${target} ]]; then
-			sudoedit ${target}
-		else
-			$EDITOR ${target}
-		fi
+		_conf_editor $target
 	elif [[ -n ${target} ]]; then
 		echo "Conf target for $1 missing: $target"
+	elif [[ -d $XDG_CONFIG_HOME/$1 ]]; then
+		if [[ -f $XDG_CONFIG_HOME/$1 ]]; then
+			_conf_editor $XDG_CONFIG_HOME/$1
+		else
+			targetfiles=($XDG_CONFIG_HOME/$1/*(N))
+			if [[ $#targetfiles == 1 ]]; then
+				_conf_editor $targetfiles[1]
+			else
+				cd $XDG_CONFIG_HOME/$1
+			fi
+		fi
 	else
-		echo "Unknown conf target: $1"
+		targetfiles=($XDG_CONFIG_HOME/$1.*(.N))
+		if [[ $#targetfiles == 1 ]]; then
+			_conf_editor $targetfiles[1]
+		elif [[ $#targetfiles -gt 1 ]]; then
+			echo "Multiple possible matches:"
+			printf " - %s\n" ${targetfiles[@]}
+			echo "Please add an entry for it in conf's config (use \`conf conf\` to edit it)"
+		else
+			echo "Unknown conf target and no matching files in XDG_CONFIG_HOME: $1"
+			echo "Please add an entry for it in conf's config (use \`conf conf\` to edit it)"
+		fi
 	fi
 
 }
